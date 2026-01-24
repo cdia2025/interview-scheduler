@@ -1,0 +1,7 @@
+streamlit
+streamlit-gsheets
+streamlit-calendar
+pandas
+reportlab
+openpyxl
+st-annotated-text
