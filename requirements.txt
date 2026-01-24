@@ -1,8 +1,7 @@
 streamlit
-gspread
-oauth2client  # or google-auth (modern alternative)
 streamlit-calendar
 pandas
 reportlab
 openpyxl
 st-annotated-text
+git+https://github.com/andfanilo/streamlit-gsheets.git
