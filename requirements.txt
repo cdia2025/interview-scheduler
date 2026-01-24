@@ -1,8 +1,8 @@
 streamlit
-streamlit-gsheets
+gspread
+google-auth
 streamlit-calendar
 pandas
 reportlab
 openpyxl
 st-annotated-text
-watchdog
