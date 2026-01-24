@@ -1,8 +1,8 @@
 streamlit
-https://github.com/andfanilo/streamlit-gsheets/archive/refs/heads/main.tar.gz
+streamlit-gsheets
 streamlit-calendar
 pandas
 reportlab
 openpyxl
 st-annotated-text
-
+watchdog
