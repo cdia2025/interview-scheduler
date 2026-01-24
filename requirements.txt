@@ -1,5 +1,6 @@
 streamlit
-streamlit-gsheets
+gspread
+oauth2client  # or google-auth (modern alternative)
 streamlit-calendar
 pandas
 reportlab
