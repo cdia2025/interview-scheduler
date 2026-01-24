@@ -1,0 +1,20 @@
+# 使用輕量級的 Python 3.9
+FROM python:3.9-slim
+
+# 設定工作目錄
+WORKDIR /app
+
+# 先複製 requirements.txt 以利用 Docker 快取層
+COPY requirements.txt .
+
+# 安裝 dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 複製所有程式碼到容器內
+COPY . .
+
+# 暴露 Cloud Run 預設的 Port 8080
+EXPOSE 8080
+
+# 啟動指令 (強制使用 8080 port)
+CMD ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0"]
