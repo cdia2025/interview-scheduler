@@ -42,7 +42,7 @@ try:
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).sheet1
 except Exception as e:
-    st.error(f"❌ Google Sheets connection failed: {str(e)}")
+    st.error(f"❌ Google Sheets connection failed: {type(e).__name__}: {str(e)}")
     st.stop()
 
 # ================= TIME SLOT GENERATOR =================
@@ -56,7 +56,6 @@ for h in range(11, 22):
 # ================= DATA FUNCTIONS =================
 
 def clean_dataframe(df):
-    """Ensure consistent string format and valid date/time"""
     df = df.astype(str)
     for col in df.columns:
         df[col] = df[col].replace(['NaT', 'nan', 'None', '<NA>'], '')
@@ -67,7 +66,6 @@ def clean_dataframe(df):
     return df.fillna("")
 
 def load_sheet_as_df():
-    """Load entire sheet as DataFrame"""
     try:
         records = sheet.get_all_records()
         if not records:
@@ -79,7 +77,6 @@ def load_sheet_as_df():
         return pd.DataFrame(columns=["Name", "ID", "Date", "Time", "Notes"])
 
 def overwrite_sheet_with_df(df):
-    """Replace entire sheet content"""
     try:
         clean_df = clean_dataframe(df)
         values = [clean_df.columns.tolist()] + clean_df.values.tolist()
@@ -91,7 +88,6 @@ def overwrite_sheet_with_df(df):
         return False
 
 def append_rows_to_sheet(df_new):
-    """Append new rows only"""
     try:
         clean_df = clean_dataframe(df_new)
         for _, row in clean_df.iterrows():
@@ -101,7 +97,7 @@ def append_rows_to_sheet(df_new):
         st.error(f"Append failed: {e}")
         return False
 
-# ================= SESSION STATE & REFRESH =================
+# ================= SESSION & REFRESH =================
 
 def initialize_session():
     if 'data' not in st.session_state:
@@ -223,7 +219,7 @@ with tab2:
 
     with c2:
         st.subheader("✏️ Edit Grid")
-        st.warning("⚠️ Always sync before editing to avoid conflicts!")
+        st.warning("⚠️ Always sync before editing!")
 
         edit_df = df.copy()
         edit_df["Date"] = pd.to_datetime(edit_df["Date"], errors='coerce').dt.date
@@ -259,16 +255,29 @@ with tab2:
 # --- TAB 3: EXPORT ---
 with tab3:
     col1, col2 = st.columns(2)
+    
+    # === COLUMN 1: Visual Reports (PDF + Excel Calendar) ===
     with col1:
         st.markdown("### 📊 Visual Reports")
         if not df.empty:
+            # --- PDF CALENDAR WITH CHINESE FONT SUPPORT ---
             def generate_visual_pdf(df):
                 buffer = io.BytesIO()
                 doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
                 elements = []
+                
+                # Register Chinese font if available
+                font_name = "Helvetica"
+                try:
+                    if os.path.exists("NotoSansCJKtc-Regular.ttf"):
+                        pdfmetrics.registerFont(TTFont('NotoSansCJK', 'NotoSansCJKtc-Regular.ttf'))
+                        font_name = 'NotoSansCJK'
+                except Exception as e:
+                    pass
+
                 styles = getSampleStyleSheet()
-                title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16)
-                cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, leading=11)
+                title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, fontName=font_name)
+                cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, leading=11, fontName=font_name)
 
                 df['dt'] = pd.to_datetime(df['Date'] + " " + df['Time'], errors='coerce')
                 df = df.dropna(subset=['dt'])
@@ -307,6 +316,7 @@ with tab3:
                         ('GRID', (0,0), (-1,-1), 0.5, colors.black),
                         ('VALIGN', (0,0), (-1,-1), 'TOP'),
                         ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                        ('FONTNAME', (0,0), (-1,-1), font_name),
                     ]))
                     elements.append(table)
                     elements.append(Spacer(1, 20))
@@ -315,13 +325,72 @@ with tab3:
                 buffer.seek(0)
                 return buffer
 
+            # --- EXCEL CALENDAR (NEW FEATURE) ---
+            def generate_visual_excel(df):
+                wb = Workbook()
+                wb.remove(wb.active)
+                thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                align = Alignment(horizontal="center", vertical="top", wrap_text=True)
+                import calendar as py_cal
+                cal = py_cal.Calendar(firstweekday=6)
+                
+                df['dt'] = pd.to_datetime(df['Date'] + " " + df['Time'], errors='coerce')
+                months = sorted(df['dt'].dt.to_period('M').dropna().unique())
+
+                for period in months:
+                    ws = wb.create_sheet(f"{period.year}-{period.month:02d}")
+                    ws.merge_cells("A1:G1")
+                    ws["A1"] = f"{period.strftime('%B %Y')}"
+                    ws["A1"].font = Font(size=14, bold=True)
+                    ws["A1"].alignment = Alignment(horizontal="center")
+                    
+                    for i, d in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], 1):
+                        c = ws.cell(2, i, d)
+                        c.fill = PatternFill("solid", fgColor="DDDDDD")
+                        c.font = Font(bold=True)
+                        c.alignment = Alignment(horizontal="center")
+                        ws.column_dimensions[chr(64+i)].width = 20
+
+                    row_num = 3
+                    for week in cal.monthdayscalendar(period.year, period.month):
+                        max_h = 1
+                        for col_idx, day in enumerate(week, 1):
+                            c = ws.cell(row_num, col_idx)
+                            c.border = thin
+                            c.alignment = align
+                            if day != 0:
+                                day_str = f"{period.year}-{period.month:02d}-{day:02d}"
+                                day_data = df[df['Date'] == day_str].sort_values('Time')
+                                val = f"{day}\n"
+                                if not day_data.empty:
+                                    lines = [f"{r['Name']} ({r['Time']})" for _, r in day_data.iterrows()]
+                                    val += "\n".join(lines)
+                                    max_h = max(max_h, len(lines)+1)
+                                c.value = val
+                        ws.row_dimensions[row_num].height = max(50, max_h * 15)
+                        row_num += 1
+                        
+                buffer = io.BytesIO()
+                wb.save(buffer)
+                buffer.seek(0)
+                return buffer
+
+            # Download buttons
             st.download_button(
                 "📄 Download PDF Calendar",
                 generate_visual_pdf(df),
                 "interview_calendar.pdf",
                 "application/pdf"
             )
+            
+            st.download_button(
+                "🗓️ Download Excel Calendar",
+                generate_visual_excel(df),
+                "interview_calendar.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
+    # === COLUMN 2: Raw Data & Import ===
     with col2:
         st.markdown("### 💾 Raw Data")
         if not df.empty:
