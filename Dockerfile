@@ -1,33 +1,28 @@
-# Use official Python 3.11 slim base image
+# Use modern Python version
 FROM python:3.11-slim
 
-# Set working directory inside container
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies required by Pillow, ReportLab, etc.
-# Non-interactive mode to avoid prompts during build
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        gcc \
-        libfreetype6-dev \
-        libjpeg62-turbo-dev \
-        libpng-dev \
-        && rm -rf /var/lib/apt/lists/*
+# Install system dependencies for reportlab/Pillow (needed for PDF/Excel with fonts)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first to leverage Docker layer caching
+# Copy requirements first (to leverage Docker cache)
 COPY requirements.txt .
-# Upgrade pip and install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
-# Copy application code (including .ttf font if present)
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code (including font files like NotoSansCJKtc-Regular.ttf)
 COPY . .
 
-# Make startup script executable
-RUN chmod +x ./start.sh
+# Expose port (Cloud Run provides PORT=8080)
+EXPOSE 8080
 
-# Expose port (documentation only; Cloud Run sets $PORT at runtime)
-EXPOSE $PORT
-
-# Start the app using the shell script to ensure $PORT expansion and signal handling
-ENTRYPOINT ["./start.sh"]
+# Run Streamlit on all interfaces and dynamic port
+CMD ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0"]
