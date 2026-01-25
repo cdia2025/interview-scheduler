@@ -6,3 +6,4 @@ pandas
 reportlab
 openpyxl
 st-annotated-text
+
