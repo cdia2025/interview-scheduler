@@ -1,21 +1,20 @@
-import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
-import json
+# app.py — Cloud Run Optimized Version
 import os
-import pandas as pd
-from datetime import datetime
+import sys
+import json
 import io
+from datetime import datetime
 
-# PDF/Excel Libraries
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+# 🔍 EARLY DEBUG LOGGING (appears even if app crashes later)
+print("🔍 DEBUG: Starting app...")
+print("🔍 DEBUG: Python version:", sys.version)
+print("🔍 DEBUG: PORT =", os.getenv("PORT", "NOT SET"))
+print("🔍 DEBUG: CWD =", os.getcwd())
+print("🔍 DEBUG: Files in dir:", [f for f in os.listdir(".") if not f.startswith('.')])
+
+# --- DEFER HEAVY IMPORTS UNTIL NEEDED ---
+# Streamlit must be imported early for UI, but others can wait
+import streamlit as st
 
 # ================= CONFIGURATION =================
 st.set_page_config(page_title="Interview Scheduler", layout="wide", page_icon="📅")
@@ -31,14 +30,16 @@ if not sheet_id:
     st.error("❌ Missing GOOGLE_SHEET_ID environment variable.")
     st.stop()
 
-# --- Connect to Google Sheets ---
+# --- Connect to Google Sheets (with error handling) ---
 try:
     creds_dict = json.loads(creds_json)
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
+    from google.oauth2.service_account import Credentials
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    import gspread
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).sheet1
 except Exception as e:
@@ -54,8 +55,8 @@ for h in range(11, 22):
         TIME_SLOTS.append(f"{h:02d}:{m:02d}")
 
 # ================= DATA FUNCTIONS =================
-
 def clean_dataframe(df):
+    import pandas as pd
     df = df.astype(str)
     for col in df.columns:
         df[col] = df[col].replace(['NaT', 'nan', 'None', '<NA>'], '')
@@ -66,6 +67,7 @@ def clean_dataframe(df):
     return df.fillna("")
 
 def load_sheet_as_df():
+    import pandas as pd
     try:
         records = sheet.get_all_records()
         if not records:
@@ -98,7 +100,6 @@ def append_rows_to_sheet(df_new):
         return False
 
 # ================= SESSION & REFRESH =================
-
 def initialize_session():
     if 'data' not in st.session_state:
         with st.spinner("🔄 Loading data from Google Sheets..."):
@@ -115,7 +116,6 @@ def refresh_data():
     st.toast("✅ Data synced!", icon="🔄")
 
 # ================= MAIN APP =================
-
 initialize_session()
 df = st.session_state.data
 
@@ -148,22 +148,25 @@ with tab1:
                 except:
                     continue
 
-        from streamlit_calendar import calendar
-        calendar_key = f"cal_{st.session_state.data_revision}"
-        calendar(
-            events=events,
-            options={
-                "initialView": "dayGridMonth",
-                "height": "750px",
-                "headerToolbar": {
-                    "left": "prev,next today",
-                    "center": "title",
-                    "right": "dayGridMonth,listMonth"
+        try:
+            from streamlit_calendar import calendar
+            calendar_key = f"cal_{st.session_state.data_revision}"
+            calendar(
+                events=events,
+                options={
+                    "initialView": "dayGridMonth",
+                    "height": "750px",
+                    "headerToolbar": {
+                        "left": "prev,next today",
+                        "center": "title",
+                        "right": "dayGridMonth,listMonth"
+                    },
+                    "eventTimeFormat": {"hour": "2-digit", "minute": "2-digit", "hour12": False},
                 },
-                "eventTimeFormat": {"hour": "2-digit", "minute": "2-digit", "hour12": False},
-            },
-            key=calendar_key
-        )
+                key=calendar_key
+            )
+        except ImportError:
+            st.warning("⚠️ `streamlit-calendar` not installed.")
     else:
         st.info("No data yet.")
 
@@ -263,25 +266,34 @@ with tab3:
             # --- PDF CALENDAR WITH CHINESE FONT SUPPORT ---
             def generate_visual_pdf(df):
                 buffer = io.BytesIO()
+                from reportlab.lib.pagesizes import A4, landscape
+                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+                from reportlab.lib import colors
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.ttfonts import TTFont
+
                 doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
                 elements = []
                 
                 # Register Chinese font if available
                 font_name = "Helvetica"
                 try:
+                    # Check if bundled font exists
                     if os.path.exists("NotoSansCJKtc-Regular.ttf"):
                         pdfmetrics.registerFont(TTFont('NotoSansCJK', 'NotoSansCJKtc-Regular.ttf'))
                         font_name = 'NotoSansCJK'
                 except Exception as e:
-                    pass
+                    print("⚠️ Font registration failed:", e)
 
                 styles = getSampleStyleSheet()
                 title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, fontName=font_name)
                 cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, leading=11, fontName=font_name)
 
+                import pandas as pd
+                import calendar as py_cal
                 df['dt'] = pd.to_datetime(df['Date'] + " " + df['Time'], errors='coerce')
                 df = df.dropna(subset=['dt'])
-                import calendar as py_cal
                 cal = py_cal.Calendar(firstweekday=6)
 
                 for period in sorted(df['dt'].dt.to_period('M').unique()):
@@ -325,13 +337,17 @@ with tab3:
                 buffer.seek(0)
                 return buffer
 
-            # --- EXCEL CALENDAR (NEW FEATURE) ---
+            # --- EXCEL CALENDAR ---
             def generate_visual_excel(df):
+                from openpyxl import Workbook
+                from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
+                import pandas as pd
+                import calendar as py_cal
+
                 wb = Workbook()
                 wb.remove(wb.active)
                 thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
                 align = Alignment(horizontal="center", vertical="top", wrap_text=True)
-                import calendar as py_cal
                 cal = py_cal.Calendar(firstweekday=6)
                 
                 df['dt'] = pd.to_datetime(df['Date'] + " " + df['Time'], errors='coerce')
