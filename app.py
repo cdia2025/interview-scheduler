@@ -20,7 +20,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 # ================= CONFIGURATION =================
 st.set_page_config(page_title="Interview Scheduler", layout="wide", page_icon="📅")
 
-# --- Load credentials from environment ---
+# --- Load secrets from environment variables ---
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 sheet_id = os.getenv("GOOGLE_SHEET_ID")
 
@@ -31,7 +31,7 @@ if not sheet_id:
     st.error("❌ Missing GOOGLE_SHEET_ID environment variable.")
     st.stop()
 
-# --- Authenticate and connect to Google Sheets ---
+# --- Connect to Google Sheets ---
 try:
     creds_dict = json.loads(creds_json)
     SCOPES = [
@@ -42,7 +42,7 @@ try:
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).sheet1
 except Exception as e:
-    st.error(f"❌ Google Sheets connection failed: {e}")
+    st.error(f"❌ Google Sheets connection failed: {str(e)}")
     st.stop()
 
 # ================= TIME SLOT GENERATOR =================
@@ -56,6 +56,7 @@ for h in range(11, 22):
 # ================= DATA FUNCTIONS =================
 
 def clean_dataframe(df):
+    """Ensure consistent string format and valid date/time"""
     df = df.astype(str)
     for col in df.columns:
         df[col] = df[col].replace(['NaT', 'nan', 'None', '<NA>'], '')
@@ -66,6 +67,7 @@ def clean_dataframe(df):
     return df.fillna("")
 
 def load_sheet_as_df():
+    """Load entire sheet as DataFrame"""
     try:
         records = sheet.get_all_records()
         if not records:
@@ -77,6 +79,7 @@ def load_sheet_as_df():
         return pd.DataFrame(columns=["Name", "ID", "Date", "Time", "Notes"])
 
 def overwrite_sheet_with_df(df):
+    """Replace entire sheet content"""
     try:
         clean_df = clean_dataframe(df)
         values = [clean_df.columns.tolist()] + clean_df.values.tolist()
@@ -88,6 +91,7 @@ def overwrite_sheet_with_df(df):
         return False
 
 def append_rows_to_sheet(df_new):
+    """Append new rows only"""
     try:
         clean_df = clean_dataframe(df_new)
         for _, row in clean_df.iterrows():
@@ -97,11 +101,11 @@ def append_rows_to_sheet(df_new):
         st.error(f"Append failed: {e}")
         return False
 
-# ================= SESSION & REFRESH =================
+# ================= SESSION STATE & REFRESH =================
 
 def initialize_session():
     if 'data' not in st.session_state:
-        with st.spinner("🔄 Loading data..."):
+        with st.spinner("🔄 Loading data from Google Sheets..."):
             st.session_state.data = load_sheet_as_df()
         st.rerun()
     if 'form_id' not in st.session_state:
@@ -219,7 +223,7 @@ with tab2:
 
     with c2:
         st.subheader("✏️ Edit Grid")
-        st.warning("⚠️ Always sync before editing!")
+        st.warning("⚠️ Always sync before editing to avoid conflicts!")
 
         edit_df = df.copy()
         edit_df["Date"] = pd.to_datetime(edit_df["Date"], errors='coerce').dt.date
