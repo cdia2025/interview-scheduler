@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import os
-import pandas as pd  # <--- CRITICAL: This must be here
+import pandas as pd  # ← This fixes the NameError
 from datetime import datetime
 import io
 
@@ -431,3 +431,4 @@ with tab3:
                     st.error("❌ Missing 'Name' column")
             except Exception as e:
                 st.error(f"Import failed: {e}")
+
