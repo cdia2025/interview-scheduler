@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import os
-import pandas as pd
+import pandas as pd  # <--- CRITICAL: This must be here
 from datetime import datetime
 import io
 
@@ -57,10 +57,14 @@ for h in range(11, 22):
 # ================= DATA FUNCTIONS =================
 
 def clean_dataframe(df):
+    # Ensure pandas is available inside function (failsafe)
+    import pandas as pd 
+    
     df = df.astype(str)
     for col in df.columns:
         df[col] = df[col].replace(['NaT', 'nan', 'None', '<NA>'], '')
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.strftime('%Y-%m-%d')
+    # Handle Time formatting robustly
     df['Time'] = pd.to_datetime(df['Time'], format='%H:%M:00', errors='coerce').fillna(
         pd.to_datetime(df['Time'], format='%H:%M', errors='coerce')
     ).dt.strftime('%H:%M')
@@ -222,7 +226,12 @@ with tab2:
         st.subheader("✏️ Edit Grid")
         st.warning("⚠️ Always sync before editing!")
 
+        # Ensure df is clean before edit
         edit_df = df.copy()
+        
+        # FIX: Ensure pandas is imported before usage here, just in case
+        import pandas as pd 
+
         edit_df["Date"] = pd.to_datetime(edit_df["Date"], errors='coerce').dt.date
         edit_df["Time"] = pd.to_datetime(edit_df["Time"], format='%H:%M', errors='coerce').dt.time
 
@@ -326,7 +335,7 @@ with tab3:
                 buffer.seek(0)
                 return buffer
 
-            # --- EXCEL CALENDAR (NEW FEATURE) ---
+            # --- EXCEL CALENDAR ---
             def generate_visual_excel(df):
                 wb = Workbook()
                 wb.remove(wb.active)
