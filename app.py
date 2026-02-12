@@ -48,9 +48,8 @@ except Exception as e:
 
 # ================= TIME SLOT GENERATOR =================
 TIME_SLOTS = []
-for h in range(11, 22):
+for h in range(9, 22):  # 從 9 點到 21 點
     for m in (0, 30):
-        if h == 21 and m == 30: continue
         TIME_SLOTS.append(f"{h:02d}:{m:02d}")
 
 # ================= DATA FUNCTIONS =================
@@ -448,4 +447,5 @@ with tab3:
                     st.error("❌ 格式錯誤：Excel 檔案中缺少 'Name' (姓名) 欄位。")
             except Exception as e:
                 st.error(f"❌ 讀取 Excel 失敗: {e}")
+
 
