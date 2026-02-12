@@ -358,7 +358,7 @@ with tab2:
             name = st.text_input("姓名", key=f"name_{form_id}")
             c_id = st.text_input("編號 (ID)", key=f"id_{form_id}")
             d = st.date_input("日期", min_value=datetime.today(), key=f"date_{form_id}")
-            t_str = st.selectbox("時間 (11:00 - 21:00)", TIME_SLOTS, key=f"time_{form_id}")
+            t_str = st.selectbox("時間 (09:00 - 21:30)", TIME_SLOTS, key=f"time_{form_id}")
             notes = st.text_area("備註", key=f"notes_{form_id}")
             
             if st.form_submit_button("💾 安全儲存至雲端"):
@@ -448,3 +448,4 @@ with tab3:
                     st.error("❌ 格式錯誤：Excel 檔案中缺少 'Name' (姓名) 欄位。")
             except Exception as e:
                 st.error(f"❌ 讀取 Excel 失敗: {e}")
+
